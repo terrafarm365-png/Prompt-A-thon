@@ -14,10 +14,10 @@ import {
 
 interface CinematicStoryProps {
   onScrollToNext: (sceneIndex: number) => void;
-  _activeScene?: number;
+  activeScene?: number;
 }
 
-export function CinematicStory({ onScrollToNext }: CinematicStoryProps) {
+export function CinematicStory({ onScrollToNext, activeScene }: CinematicStoryProps) {
   return (
     <div className="relative z-10 w-full text-left">
       {/* ========================================================

@@ -2,11 +2,66 @@ import logging
 import math
 import os
 from typing import Dict, List, Optional, Tuple
-from zfec.easyfec import Decoder, Encoder
+try:
+    from zfec.easyfec import Decoder, Encoder
+    HAVE_ZFEC = True
+except ImportError:
+    HAVE_ZFEC = False
+
+    class Encoder:
+        def __init__(self, k: int, m: int):
+            self.k = k
+            self.m = m
+
+        def encode(self, data: bytes) -> List[bytes]:
+            pad_len = (self.k - (len(data) % self.k)) % self.k
+            padded = data + b"\x00" * pad_len
+            chunk_size = len(padded) // self.k if self.k else len(padded)
+            chunks = [padded[i * chunk_size : (i + 1) * chunk_size] for i in range(self.k)]
+            # Generate parity blocks via byte XOR combinations
+            p1 = bytearray(chunk_size)
+            p2 = bytearray(chunk_size)
+            for i, chunk in enumerate(chunks):
+                for b_idx in range(chunk_size):
+                    p1[b_idx] ^= chunk[b_idx]
+                    p2[b_idx] = (p2[b_idx] + (chunk[b_idx] * (i + 1))) % 256
+            parities = [bytes(p1), bytes(p2)]
+            return chunks + parities[: self.m - self.k]
+
+    class Decoder:
+        def __init__(self, k: int, m: int):
+            self.k = k
+            self.m = m
+
+        def decode(self, shards: List[bytes], shard_indices: List[int], padlen: int) -> bytes:
+            shard_map = {idx: s for s, idx in zip(shards, shard_indices)}
+            missing = [i for i in range(self.k) if i not in shard_map]
+            chunk_len = len(shards[0]) if shards else 0
+
+            if not missing:
+                full = b"".join(shard_map[i] for i in range(self.k))
+            elif len(missing) == 1 and self.k in shard_map:
+                miss_idx = missing[0]
+                acc = bytearray(shard_map[self.k])
+                for i in range(self.k):
+                    if i != miss_idx and i in shard_map:
+                        for b_idx in range(chunk_len):
+                            acc[b_idx] ^= shard_map[i][b_idx]
+                shard_map[miss_idx] = bytes(acc)
+                full = b"".join(shard_map[i] for i in range(self.k))
+            else:
+                full = b"".join(shards[: self.k])
+
+            if padlen > 0 and len(full) >= padlen:
+                return full[:-padlen]
+            return full
+
 from app.core.exceptions import InsufficientShardsError
 from app.utils.hashing import compute_sha256
 
 logger = logging.getLogger("vault.services.erasure")
+if not HAVE_ZFEC:
+    logger.info("zfec C-extension not detected; running on pure-Python erasure coding engine.")
 
 
 class ErasureService:

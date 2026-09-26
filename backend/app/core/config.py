@@ -73,6 +73,14 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def resolve_serverless_db_url(cls, v: Optional[str]) -> str:
+        url = v or "sqlite+aiosqlite:///./vault_dev.db"
+        if (os.environ.get("VERCEL") == "1" or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) and url.startswith("sqlite+aiosqlite:///."):
+            return "sqlite+aiosqlite:////tmp/vault_dev.db"
+        return url
+
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
@@ -83,8 +91,13 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> List[str]:
         """Return parsed list of CORS origins."""
         if not self.CORS_ORIGINS:
-            return ["http://localhost:3000"]
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+            origins = ["http://localhost:3000"]
+        else:
+            origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        vercel_url = os.environ.get("VERCEL_URL")
+        if vercel_url:
+            origins.append(f"https://{vercel_url}")
+        return origins
 
     @property
     def total_shards(self) -> int:

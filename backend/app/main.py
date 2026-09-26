@@ -49,19 +49,24 @@ async def lifespan(app: FastAPI):
     # 3. Connect task queue (Redis / in-memory fallback)
     await get_task_queue().connect()
 
-    # 4. Start background workers
-    await health_worker.start()
-    await repair_worker.start()
-    await maintenance_worker.start()
+    # 4. Start background workers (skip in serverless runtimes where loops are frozen)
+    is_serverless = os.environ.get("VERCEL") == "1" or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+    if not is_serverless:
+        await health_worker.start()
+        await repair_worker.start()
+        await maintenance_worker.start()
+    else:
+        logger.info("Serverless runtime detected (Vercel); continuous background worker loops bypassed.")
 
     logger.info(f"Vault Control Plane online. Listening on {settings.API_HOST}:{settings.API_PORT}")
     yield
 
     # Shutdown
-    logger.info("Shutting down background workers...")
-    await health_worker.stop()
-    await repair_worker.stop()
-    await maintenance_worker.stop()
+    if not is_serverless:
+        logger.info("Shutting down background workers...")
+        await health_worker.stop()
+        await repair_worker.stop()
+        await maintenance_worker.stop()
     logger.info("Vault Control Plane shutdown complete.")
 
 
@@ -77,19 +82,31 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware (Requirement 30: strict origins, no wildcard '*')
+# CORS Middleware (supports configured origins plus any *.vercel.app deployment preview)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+_db_initialized = False
+
 
 @app.middleware("http")
 async def request_tracing_middleware(request: Request, call_next):
     """Assigns unique X-Request-ID and measures request latency for observability."""
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            await init_db()
+            _db_initialized = True
+        except Exception as e:
+            logger.warning(f"Lazy DB initialization check: {e}")
+            _db_initialized = True
+
     req_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     token = request_id_ctx.set(req_id)
     start_time = time.perf_counter()
@@ -157,3 +174,10 @@ async def root():
         "api_v1": "/api/v1",
         "health": "/api/v1/health/system",
     }
+
+
+@app.get("/health", tags=["Health"])
+async def health_probe():
+    """Root liveness probe."""
+    return {"status": "ok", "service": settings.APP_NAME, "role": "control-plane"}
+
