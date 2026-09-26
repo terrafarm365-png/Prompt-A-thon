@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  vault-postgres:
+    image: postgres:16-alpine
+    container_name: vault-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: vault
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  vault-redis:
+    image: redis:7-alpine
+    container_name: vault-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  vault-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vault-control-plane
+    restart: unless-stopped
+    depends_on:
+      vault-postgres:
+        condition: service_healthy
+      vault-redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Vault
+      - APP_ENV=production
+      - DEBUG=false
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@vault-postgres:5432/vault
+      - REDIS_URL=redis://vault-redis:6379/0
+      - JWT_SECRET_KEY=production_random_secret_vault_control_plane_32_bytes_min
+      - CORS_ORIGINS=http://localhost:3000
+      # Storage Node Endpoints (Data Plane - paste host/internal IPs here)
+      - STORAGE_NODE_A_URL=http://host.docker.internal:9101
+      - STORAGE_NODE_B_URL=http://host.docker.internal:9102
+      - STORAGE_NODE_C_URL=http://host.docker.internal:9103
+      - STORAGE_NODE_D_URL=http://host.docker.internal:9104
+      - STORAGE_NODE_E_URL=http://host.docker.internal:9105
+      - STORAGE_NODE_F_URL=http://host.docker.internal:9106
+      - STORAGE_NODE_SHARED_SECRET=vault-storage-node-internal-secret-token
+      - DATA_SHARDS=4
+      - PARITY_SHARDS=2
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  postgres_data:
+  redis_data:

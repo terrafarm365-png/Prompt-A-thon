@@ -1,0 +1,56 @@
+import { ActivityEvent } from "@/types";
+
+export const mockActivity: ActivityEvent[] = [
+  {
+    id: "act-01",
+    type: "upload",
+    title: "Object Upload Completed",
+    description: "project.zip (200 MB) was chunked into 4 data shards + 2 parity shards and replicated across cluster.",
+    timestamp: "2026-09-26T14:22:00Z",
+    severity: "success",
+    targetId: "obj-001",
+  },
+  {
+    id: "act-02",
+    type: "repair",
+    title: "Automatic Shard Repair Initialized",
+    description: "Parity shard P1 for infra-backup-nodes.tar.gz queued for sync to Node-05 after transient I/O timeout.",
+    timestamp: "2026-09-26T14:03:00Z",
+    severity: "warning",
+    targetId: "rep-101",
+  },
+  {
+    id: "act-03",
+    type: "integrity_check",
+    title: "SHA-256 Scrub Completed",
+    description: "Continuous scrub verified 12,482 objects across 6 storage drives. 0 bit rot errors detected.",
+    timestamp: "2026-09-26T13:45:00Z",
+    severity: "info",
+  },
+  {
+    id: "act-04",
+    type: "upload",
+    title: "Dataset Ingested",
+    description: "analytics_2026_q3.parquet (1.4 GB) distributed across racks A, B, and C.",
+    timestamp: "2026-09-26T13:00:00Z",
+    severity: "success",
+    targetId: "obj-003",
+  },
+  {
+    id: "act-05",
+    type: "rebalance",
+    title: "Cluster Quorum Heartbeat Synchronized",
+    description: "All 6 storage nodes acknowledged lease renewal with 4ms latency jitter.",
+    timestamp: "2026-09-26T12:00:00Z",
+    severity: "info",
+  },
+  {
+    id: "act-06",
+    type: "repair",
+    title: "Shard Re-sync Finished",
+    description: "Parity shard P2 for project.zip successfully verified and sealed on Node-06.",
+    timestamp: "2026-09-26T11:21:12Z",
+    severity: "success",
+    targetId: "rep-100",
+  },
+];
