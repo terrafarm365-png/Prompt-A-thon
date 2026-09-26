@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "description": "Vault - Distributed Object Storage System with Next.js Frontend and FastAPI Control Plane",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
     "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
     "lint": "npm --prefix frontend run lint"
   },
